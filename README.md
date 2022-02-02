@@ -2,6 +2,8 @@
 This guide shows how to access GCP resources from Azure DevOps pipelines using Terraform and credentals from Workload Identity Federation: https://cloud.google.com/iam/docs/workload-identity-federation.
 This flow requires no secret storing for GCP credenetials.
 
+![Flow](media/flow.png)
+
 # Demo contents
 The demo has two flows:
 1. Self-Hosted pipelines: This is expected to run on Azure VM with a Managed Identity
