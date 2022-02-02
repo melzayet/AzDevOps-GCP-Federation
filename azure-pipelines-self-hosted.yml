@@ -1,0 +1,18 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool: console
+
+steps:
+- script: |
+    export GOOGLE_APPLICATION_CREDENTIALS=<location of GCP JSON credentials file>
+    terraform init
+    terraform apply -auto-approve
+    terraform destroy -auto-approve -input=false
+  displayName: 'Run terraform'
+  workingDirectory: self-hosted

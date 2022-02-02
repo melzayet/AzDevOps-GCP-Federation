@@ -1,0 +1,64 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+steps:
+- task: TerraformInstaller@0
+  inputs:
+    terraformVersion: '1.0.10'
+- task: AzureCLI@2
+  displayName: Get GCP Access Token.
+  inputs:
+    azureSubscription: <Azure DevOps Service Connection with Automatic Service Principal and access to AAD App>
+    scriptType: bash
+    workingDirectory: ms-hosted
+    scriptLocation: inlineScript    
+    inlineScript: |      
+      SUBJECT_TOKEN_TYPE="urn:ietf:params:oauth:token-type:jwt"
+      SUBJECT_TOKEN=$(az account get-access-token --resource-type ms-graph --resource <App URI for Azure AD app> | jq -r .accessToken)
+      STS_TOKEN=$(curl -0 -X POST https://sts.googleapis.com/v1/token \
+          -H 'Content-Type: text/json; charset=utf-8' \
+          -d @- <<EOF | jq -r .access_token
+          {
+              "audience"           : "<ID of GCP Identity Provider, for example //iam.googleapis.com/projects/zzzzz/locations/global/workloadIdentityPools/yyyyy/providers/xxxxx>",
+              "grantType"          : "urn:ietf:params:oauth:grant-type:token-exchange",
+              "requestedTokenType" : "urn:ietf:params:oauth:token-type:access_token",
+              "scope"              : "https://www.googleapis.com/auth/cloud-platform",
+              "subjectTokenType"   : "$SUBJECT_TOKEN_TYPE",
+              "subjectToken"       : "$SUBJECT_TOKEN"
+          }
+      EOF)
+      echo ===============
+      echo $SUBJECT_TOKEN
+      echo ===============
+      echo ======GCP STS TOKEN=========
+      echo $STS_TOKEN
+      ACCESS_TOKEN=$(curl -0 -X POST https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/azureaccessserviceaccount@devtest-330619.iam.gserviceaccount.com:generateAccessToken \
+          -H "Content-Type: text/json; charset=utf-8" \
+          -H "Authorization: Bearer $STS_TOKEN" \
+          -d @- <<EOF | jq -r .accessToken
+          {
+              "scope": [ "https://www.googleapis.com/auth/cloud-platform" ]
+          }
+      EOF)
+      echo ======GCP Access TOKEN=========      
+      echo $ACCESS_TOKEN
+      echo $ACCESS_TOKEN > access_token
+
+- script: |
+    terraform init -input=false
+    ACCESS_TOKEN=$(cat access_token)
+    echo ======GCP Access TOKEN=========      
+    echo "accesskey=\"${ACCESS_TOKEN}\"" > terraform.tfvars
+    cat terraform.tfvars
+    #terraform plan -out=tfplan -var-file="terraform.tfvars" -input=false
+    terraform apply -auto-approve -var-file="terraform.tfvars" -input=false
+    terraform destroy -auto-approve -input=false
+  displayName: 'Run Terraform'
+  workingDirectory: ms-hosted
